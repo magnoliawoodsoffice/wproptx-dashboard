@@ -161,13 +161,12 @@ let allData={},activeLoc='All Locations',activePropSec='overview',activeMain='pr
 
 function switchMain(s){
   activeMain=s;
-  const labels={properties:'Properties',tasks:'Tasks',projects:'Projects'};
-  document.querySelectorAll('.mnav').forEach(b=>b.classList.toggle('active',b.textContent.trim()===labels[s]));
+  document.querySelectorAll('.mnav').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
   document.getElementById('properties-section').style.display=s==='properties'?'block':'none';
   document.getElementById('tasks-section').style.display=s==='tasks'?'block':'none';
   document.getElementById('projects-section').style.display=s==='projects'?'block':'none';
-  if(s==='tasks'&&!allTasks.length)loadTasks();
-  else if(s==='tasks')renderTasks();
+  if(s==='tasks')renderTasks();
   if(s==='projects')loadProjects();
 }
 
@@ -382,7 +381,16 @@ async function cycleStatus(id){
   const cycle={Open:'In Progress','In Progress':'Done',Done:'Open'};
   const ns=cycle[t['Status']]||'Open';
   t['Status']=ns;
-  renderTasks();
+  if(activeProjectId){
+    const proj=allProjects.find(p=>p['Project ID']===activeProjectId);
+    if(proj){
+      proj['Completed Count']=allTasks.filter(t=>t['Project ID']===activeProjectId&&t['Status']==='Done').length;
+      proj['Progress']=proj['Task Count']>0?Math.round((proj['Completed Count']/proj['Task Count'])*100):0;
+    }
+    renderProjectDetail(activeProjectId);
+  } else {
+    renderTasks();
+  }
   try{
     await fetch(TASKS_API,{method:'POST',mode:'cors',headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'updateTask','Task ID':id,Status:ns})});
@@ -393,7 +401,17 @@ async function cycleStatus(id){
 async function deleteTask(id){
   if(!confirm('Delete this task?'))return;
   allTasks=allTasks.filter(t=>t['Task ID']!==id);
-  renderTasks();
+  if(activeProjectId){
+    const proj=allProjects.find(p=>p['Project ID']===activeProjectId);
+    if(proj){
+      proj['Task Count']=allTasks.filter(t=>t['Project ID']===activeProjectId).length;
+      proj['Completed Count']=allTasks.filter(t=>t['Project ID']===activeProjectId&&t['Status']==='Done').length;
+      proj['Progress']=proj['Task Count']>0?Math.round((proj['Completed Count']/proj['Task Count'])*100):0;
+    }
+    renderProjectDetail(activeProjectId);
+  } else {
+    renderTasks();
+  }
   try{
     await fetch(TASKS_API,{method:'POST',mode:'cors',headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'deleteTask','Task ID':id})});
@@ -570,9 +588,15 @@ async function submitProject(){
   }catch(e){showToast('Error creating project');}
 }
 
+let submittingProjectTask=false;
 async function submitProjectTask(){
-  const title=document.getElementById('pj-task-title').value.trim();
+  if(submittingProjectTask)return;
+  const titleEl=document.getElementById('pj-task-title');
+  const title=titleEl.value.trim();
   if(!title)return;
+  submittingProjectTask=true;
+  const btn=document.querySelector('#projects-body .add-btn');
+  if(btn){btn.disabled=true;btn.textContent='Adding...';}
   const proj=allProjects.find(p=>p['Project ID']===activeProjectId);
   try{
     const res=await fetch(TASKS_API,{method:'POST',mode:'cors',headers:{'Content-Type':'text/plain'},
@@ -584,8 +608,11 @@ async function submitProjectTask(){
         Source:'Project',Status:'Open',
         'Project ID':activeProjectId})});
     const data=await res.json();
-    if(data.success){showToast('Task added');await loadProjects();}
+    if(data.success){titleEl.value='';showToast('Task added');await loadProjects();}
+    else showToast('Error: '+(data.error||'Unknown'));
   }catch(e){showToast('Error adding task');}
+  submittingProjectTask=false;
+  if(btn){btn.disabled=false;btn.textContent='+ Add task';}
 }
 
 async function updateProjectStatus(id,status){
@@ -624,7 +651,6 @@ async function archiveDoneTasks(){
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
 loadPropertyData();
-loadTasks();
 </script>
 </body>
 </html>
