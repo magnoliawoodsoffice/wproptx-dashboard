@@ -119,10 +119,23 @@ tr:hover td{background:#fafaf8;}
 .b-inprogress{background:#E6F1FB;color:#0C447C;}
 .b-onhold{background:#FAEEDA;color:#633806;}
 .b-complete{background:#E1F5EE;color:#085041;}
+
+.modal-overlay{position:absolute;top:0;left:0;width:100%;min-height:100%;background:rgba(0,0,0,0.45);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem;}
+.modal-box{background:#fff;border-radius:14px;width:100%;max-width:820px;overflow:hidden;margin-top:1rem;}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #eee;}
+.modal-title{font-size:15px;font-weight:600;color:#1a1a1a;}
+.modal-close{font-size:22px;cursor:pointer;border:none;background:none;color:#999;line-height:1;padding:0 4px;}
+.modal-close:hover{color:#1a1a1a;}
+.modal-body{padding:16px 20px;max-height:70vh;overflow-y:auto;}
+.mc-link{cursor:pointer;transition:opacity .15s;}
+.mc-link:hover{opacity:.8;}
+.mc-link .mc-sub{color:#1D9E75;font-weight:500;}
+#detail-modal{display:none;}
+#detail-modal.open{display:flex;}
 </style>
 </head>
 <body>
-<div class="dash">
+<div class="dash" style="position:relative;">
   <div class="topbar">
     <div>
       <div class="topbar-title">W Properties — Operations Dashboard</div>
@@ -144,6 +157,15 @@ tr:hover td{background:#fafaf8;}
   </div>
   <div id="projects-section" style="display:none;">
     <div id="projects-body"><div class="loading"><span class="spinner"></span>Loading projects...</div></div>
+  </div>
+</div>
+<div id="detail-modal" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <div class="modal-title" id="modal-title">Details</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -237,11 +259,11 @@ function renderProperties(){
   if(activePropSec==='overview'){
     html+=`<div class="metrics">
       <div class="mc"><div class="mc-label">Occupancy rate</div><div class="mc-val green">${occRate}%</div><div class="mc-sub">${rented.length} of ${total} units</div></div>
-      <div class="mc"><div class="mc-label">Vacant</div><div class="mc-val red">${vacant.length}</div><div class="mc-sub">available now</div></div>
-      <div class="mc"><div class="mc-label">Notice given</div><div class="mc-val amber">${notice.length}</div><div class="mc-sub">vacating soon</div></div>
-      <div class="mc"><div class="mc-label">Renewals due</div><div class="mc-val amber">${renewalsSoon.length}</div><div class="mc-sub">within 90 days</div></div>
-      <div class="mc"><div class="mc-label">Insurance alerts</div><div class="mc-val ${insAlert.length>0?'red':'green'}">${insAlert.length}</div><div class="mc-sub">expiring ≤60 days</div></div>
-      <div class="mc"><div class="mc-label">Move-outs</div><div class="mc-val blue">${moveouts.length}</div><div class="mc-sub">next 60 days</div></div>
+      <div class="mc mc-link" onclick="showVacantDetail()"><div class="mc-label">Vacant</div><div class="mc-val red">${vacant.length}</div><div class="mc-sub">view details →</div></div>
+      <div class="mc mc-link" onclick="showNoticeDetail()"><div class="mc-label">Notice given</div><div class="mc-val amber">${notice.length}</div><div class="mc-sub">view details →</div></div>
+      <div class="mc mc-link" onclick="showRenewalsDetail()"><div class="mc-label">Renewals due</div><div class="mc-val amber">${renewalsSoon.length}</div><div class="mc-sub">view details →</div></div>
+      <div class="mc mc-link" onclick="showInsuranceDetail()"><div class="mc-label">Insurance alerts</div><div class="mc-val ${insAlert.length>0?'red':'green'}">${insAlert.length}</div><div class="mc-sub">view details →</div></div>
+      <div class="mc mc-link" onclick="showMoveoutsDetail()"><div class="mc-label">Move-outs</div><div class="mc-val blue">${moveouts.length}</div><div class="mc-sub">view details →</div></div>
     </div>`;
     if(showLoc){
       html+=`<div class="card"><div class="card-hdr"><div class="card-title">Occupancy by location</div></div><div class="tbl-wrap"><table><thead><tr><th>Location</th><th>Manager</th><th>Total</th><th>Rented</th><th>Vacant</th><th>Notice</th><th>Rate</th></tr></thead><tbody>`;
@@ -646,6 +668,105 @@ async function archiveDoneTasks(){
     const data=await res.json();
     if(data.success){showToast(`${data.archived} tasks archived`);await loadTasks();if(activeMain==='projects')await loadProjects();}
   }catch(e){showToast('Error archiving tasks');}
+}
+
+
+// ── DETAIL MODALS ─────────────────────────────────────────
+function openModal(title, html){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').innerHTML=html;
+  document.getElementById('detail-modal').classList.add('open');
+}
+function closeModal(){
+  document.getElementById('detail-modal').classList.remove('open');
+}
+
+function modalTable(headers, rows){
+  if(!rows.length) return '<div class="empty">No items to display.</div>';
+  return `<div class="tbl-wrap"><table>
+    <thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.join('')}</tbody>
+  </table></div>`;
+}
+
+function getDetailData(){
+  // Use current active location filter
+  if(activeLoc==='All Locations'){
+    let c=[];
+    LOCATIONS.forEach(l=>{if(allData[l.name])allData[l.name].forEach(r=>c.push({...r,_location:l.name}));});
+    return c;
+  }
+  return(allData[activeLoc]||[]).map(r=>({...r,_location:activeLoc}));
+}
+
+function showVacantDetail(){
+  const data=getDetailData();
+  const vacant=data.filter(r=>(r['Status']||'').toLowerCase()==='vacant');
+  const rows=vacant.map(r=>`<tr>
+    <td>${locBadge(r._location)}</td>
+    <td>${r['Unit']||'—'}</td>
+    <td>${r['Size']||'—'}</td>
+    <td>${r['Asking Price']||'—'}</td>
+  </tr>`);
+  openModal(`Vacant Units (${vacant.length})`, modalTable(['Location','Unit','Size','Asking Price'], rows));
+}
+
+function showNoticeDetail(){
+  const data=getDetailData();
+  const notice=data.filter(r=>(r['Status']||'').toLowerCase().includes('notice'));
+  const sorted=[...notice].sort((a,b)=>new Date(a['Move out Date']||'9999')-new Date(b['Move out Date']||'9999'));
+  const rows=sorted.map(r=>`<tr>
+    <td>${locBadge(r._location)}</td>
+    <td>${r['Unit']||'—'}</td>
+    <td>${r['Tenant']||'—'}</td>
+    <td>${fmtDate(r['Move out Date'])}</td>
+    <td>${r['Move out Date']?expiryBadge(r['Move out Date']):'—'}</td>
+  </tr>`);
+  openModal(`Notice Given (${notice.length})`, modalTable(['Location','Unit','Tenant','Move-out Date','Days'], rows));
+}
+
+function showRenewalsDetail(){
+  const data=getDetailData();
+  const today=new Date(), in90=new Date(today.getTime()+90*86400000);
+  const renewals=data.filter(r=>{const d=new Date(r['Agreement Expiration']);return!isNaN(d)&&d>=today&&d<=in90;});
+  const sorted=[...renewals].sort((a,b)=>new Date(a['Agreement Expiration'])-new Date(b['Agreement Expiration']));
+  const rows=sorted.map(r=>`<tr>
+    <td>${locBadge(r._location)}</td>
+    <td>${r['Unit']||'—'}</td>
+    <td>${r['Tenant']||'—'}</td>
+    <td>${fmtDate(r['Agreement Expiration'])}</td>
+    <td>${expiryBadge(r['Agreement Expiration'])}</td>
+  </tr>`);
+  openModal(`Renewals Due — Next 90 Days (${renewals.length})`, modalTable(['Location','Unit','Tenant','Agreement Ends','Days'], rows));
+}
+
+function showInsuranceDetail(){
+  const data=getDetailData();
+  const alerts=data.filter(r=>{const d=daysUntil(r['Insurance Expiration']);return d!==null&&d>=0&&d<=60;});
+  const sorted=[...alerts].sort((a,b)=>new Date(a['Insurance Expiration'])-new Date(b['Insurance Expiration']));
+  const rows=sorted.map(r=>`<tr>
+    <td>${locBadge(r._location)}</td>
+    <td>${r['Unit']||'—'}</td>
+    <td>${r['Tenant']||'—'}</td>
+    <td>${fmtDate(r['Insurance Expiration'])}</td>
+    <td>${expiryBadge(r['Insurance Expiration'])}</td>
+    <td>${r['Insurance Status']||'—'}</td>
+  </tr>`);
+  openModal(`Insurance Alerts (${alerts.length})`, modalTable(['Location','Unit','Tenant','Expiration','Days','Status'], rows));
+}
+
+function showMoveoutsDetail(){
+  const data=getDetailData();
+  const moveouts=data.filter(r=>{const d=daysUntil(r['Move out Date']);return d!==null&&d>=0&&d<=60;});
+  const sorted=[...moveouts].sort((a,b)=>new Date(a['Move out Date'])-new Date(b['Move out Date']));
+  const rows=sorted.map(r=>`<tr>
+    <td>${locBadge(r._location)}</td>
+    <td>${r['Unit']||'—'}</td>
+    <td>${r['Tenant']||'—'}</td>
+    <td>${fmtDate(r['Move out Date'])}</td>
+    <td>${expiryBadge(r['Move out Date'])}</td>
+  </tr>`);
+  openModal(`Move-Outs — Next 60 Days (${moveouts.length})`, modalTable(['Location','Unit','Tenant','Move-out Date','Days'], rows));
 }
 
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
