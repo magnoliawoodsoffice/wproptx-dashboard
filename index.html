@@ -132,6 +132,41 @@ tr:hover td{background:#fafaf8;}
 .mc-link .mc-sub{color:#1D9E75;font-weight:500;}
 #detail-modal{display:none;}
 #detail-modal.open{display:flex;}
+
+.contacts-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:1.25rem;}
+.contacts-toolbar input{font-size:13px;padding:7px 12px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;flex:1;min-width:180px;}
+.contacts-toolbar input:focus{border-color:#1D9E75;}
+.filter-pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.25rem;}
+.filter-pill{padding:4px 12px;border-radius:20px;font-size:11px;cursor:pointer;border:1px solid #ddd;background:#fff;color:#888;transition:all .15s;font-weight:500;}
+.filter-pill:hover{background:#f5f5f3;}
+.filter-pill.active{background:#1D9E75;color:#fff;border-color:#1D9E75;}
+.contact-card{background:#fff;border:1px solid #eee;border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:14px;transition:border-color .15s;}
+.contact-card:hover{border-color:#1D9E75;}
+.contact-avatar{width:38px;height:38px;border-radius:50%;background:#1D9E75;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;}
+.contact-info{flex:1;min-width:0;}
+.contact-name{font-size:13px;font-weight:600;color:#1a1a1a;}
+.contact-email{font-size:12px;color:#888;margin-top:2px;}
+.contact-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;}
+.contact-score{font-size:11px;color:#999;margin-left:auto;white-space:nowrap;}
+.contacts-count{font-size:12px;color:#999;margin-bottom:1rem;}
+.list-badge{background:#E6F1FB;color:#0C447C;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;}
+.tag-badge{background:#EEEDFE;color:#3C3489;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;}
+.err-msg{padding:12px 16px;background:#FCEBEB;border-radius:8px;font-size:13px;color:#791F1F;margin-bottom:1rem;}
+
+.vo-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1.5rem;border-bottom:1px solid #e5e5e0;}
+.vtab{padding:7px 16px;font-size:13px;cursor:pointer;border:none;background:none;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;}
+.vtab:hover{color:#1a1a1a;}
+.vtab.active{color:#1D9E75;border-bottom-color:#1D9E75;font-weight:600;}
+.vo-search{display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap;}
+.vo-search input{font-size:13px;padding:7px 12px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;flex:1;min-width:180px;}
+.vo-search input:focus{border-color:#1D9E75;}
+.vo-search select{font-size:13px;padding:7px 10px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;}
+.vo-table-wrap{overflow-x:auto;}
+.vo-count{font-size:12px;color:#999;margin-bottom:1rem;}
+.svc-badge-addr{background:#E6F1FB;color:#0C447C;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;}
+.svc-badge-pmb{background:#EEEDFE;color:#3C3489;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;}
+.svc-badge-mail{background:#FAEEDA;color:#633806;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;}
+.svc-badge-other{background:#f0f0ee;color:#666;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;}
 </style>
 </head>
 <body>
@@ -147,6 +182,8 @@ tr:hover td{background:#fafaf8;}
     <button class="mnav active" onclick="switchMain('properties')">Properties</button>
     <button class="mnav" onclick="switchMain('tasks')">Tasks</button>
     <button class="mnav" onclick="switchMain('projects')">Projects</button>
+    <button class="mnav" onclick="switchMain('contacts')">Contacts</button>
+    <button class="mnav" onclick="switchMain('vo')">Virtual Office</button>
   </div>
   <div id="properties-section">
     <div class="loc-tabs" id="loc-tabs"></div>
@@ -157,6 +194,12 @@ tr:hover td{background:#fafaf8;}
   </div>
   <div id="projects-section" style="display:none;">
     <div id="projects-body"><div class="loading"><span class="spinner"></span>Loading projects...</div></div>
+  </div>
+  <div id="contacts-section" style="display:none;">
+    <div id="contacts-body"><div class="loading"><span class="spinner"></span>Loading contacts...</div></div>
+  </div>
+  <div id="vo-section" style="display:none;">
+    <div id="vo-body"><div class="loading"><span class="spinner"></span>Loading virtual office data...</div></div>
   </div>
 </div>
 <div id="detail-modal" class="modal-overlay" onclick="if(event.target===this)closeModal()">
@@ -179,6 +222,8 @@ const LOCATIONS=[
   {name:'South Lake Conroe',url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vT4YmIGGk9tvdLQ_N0IQ8s-47WZLPWnaaldw2q3JnZ0W9KgET8zjPugSV9JGQH3sZPImcX6cKyQb8Y_/pub?gid=1238510324&single=true&output=csv',manager:'Crystal',color:'b-pink',dot:'#D4537E'},
 ];
 const TEAM=['General','James','Johnna','Crystal','Angela','Chris','Christine'];
+let acContactsLoaded=false,allContacts=[],allContactTags=[],allContactLists=[],activeTagFilter='',activeListFilter='',contactSearch='';
+let voData={Magnolia:[],Walden:[]},activeVOLocation='Magnolia',voSearch='',voServiceFilter='';
 let allData={},activeLoc='All Locations',activePropSec='overview',activeMain='properties',activePerson='General',allTasks=[],allProjects=[],activeProjectId=null,showNewProjForm=false;
 
 function switchMain(s){
@@ -188,8 +233,13 @@ function switchMain(s){
   document.getElementById('properties-section').style.display=s==='properties'?'block':'none';
   document.getElementById('tasks-section').style.display=s==='tasks'?'block':'none';
   document.getElementById('projects-section').style.display=s==='projects'?'block':'none';
+  document.getElementById('contacts-section').style.display=s==='contacts'?'block':'none';
+  document.getElementById('vo-section').style.display=s==='vo'?'block':'none';
   if(s==='tasks')renderTasks();
   if(s==='projects')loadProjects();
+  if(s==='contacts'&&!allContacts.length)loadContacts();
+  else if(s==='contacts')renderContacts();
+  if(s==='vo')loadVO();
 }
 
 function refreshAll(){loadPropertyData();if(activeMain==='tasks')loadTasks();if(activeMain==='projects')loadProjects();}
@@ -767,6 +817,247 @@ function showMoveoutsDetail(){
     <td>${expiryBadge(r['Move out Date'])}</td>
   </tr>`);
   openModal(`Move-Outs — Next 60 Days (${moveouts.length})`, modalTable(['Location','Unit','Tenant','Move-out Date','Days'], rows));
+}
+
+
+// ── CONTACTS ──────────────────────────────────────────────
+const AC_BASE = 'https://wproptx.activehosted.com';
+const AC_KEY  = 'b423b7e625d7589eff0d27a7a2fb71f6c728170601f11189a08997fb2c37f71fa16ee9b1';
+const CORS    = 'https://corsproxy.io/?';
+
+async function acGet(path){
+  const sep = path.includes('?')?'&':'?';
+  const url = AC_BASE + path + sep + 'api_key=' + AC_KEY;
+  const res = await fetch(CORS + encodeURIComponent(url));
+  if(!res.ok) throw new Error('AC API error: ' + res.status);
+  return res.json();
+}
+
+async function loadContacts(){
+  const body = document.getElementById('contacts-body');
+  body.innerHTML='<div class="loading"><span class="spinner"></span>Loading contacts from ActiveCampaign...</div>';
+  try{
+    const [first, tagsData, listsData] = await Promise.all([
+      acGet('/api/3/contacts?limit=100&offset=0&orders[lastName]=ASC'),
+      acGet('/api/3/tags?limit=100'),
+      acGet('/api/3/lists?limit=100'),
+    ]);
+    allContactTags  = tagsData.tags   || [];
+    allContactLists = listsData.lists || [];
+    let contacts = first.contacts || [];
+    const total = parseInt((first.meta&&first.meta.total)||contacts.length);
+    if(total > 100){
+      const pages = Math.min(Math.ceil(total/100), 5);
+      const rest  = await Promise.all(
+        Array.from({length:pages-1},(_,i)=>acGet(`/api/3/contacts?limit=100&offset=${(i+1)*100}&orders[lastName]=ASC`))
+      );
+      rest.forEach(p=>{ if(p.contacts) contacts=contacts.concat(p.contacts); });
+    }
+    // Fetch tags + lists per contact
+    await Promise.all(contacts.map(async c=>{
+      try{
+        const [ct,cl]=await Promise.all([
+          acGet(`/api/3/contacts/${c.id}/contactTags`),
+          acGet(`/api/3/contacts/${c.id}/contactLists`),
+        ]);
+        c._tags  = (ct.contactTags ||[]).map(t=>String(t.tag));
+        c._lists = (cl.contactLists||[]).filter(l=>l.status==='1').map(l=>String(l.list));
+      }catch(e){ c._tags=[]; c._lists=[]; }
+    }));
+    allContacts = contacts;
+    acContactsLoaded = true;
+    renderContacts();
+  }catch(err){
+    body.innerHTML='<div class="err-msg">Could not load contacts. Error: '+err.message+'<br><br><button class="refresh-btn" onclick="loadContacts()">Try again</button></div>';
+    console.error(err);
+  }
+}
+
+function getTagName(tagId){
+  const t=allContactTags.find(x=>String(x.id)===String(tagId));
+  return t?t.tag:('Tag '+tagId);
+}
+function getListName(listId){
+  const l=allContactLists.find(x=>String(x.id)===String(listId));
+  return l?l.name:('List '+listId);
+}
+
+function renderContacts(){
+  const body=document.getElementById('contacts-body');
+  let filtered=[...allContacts];
+  if(contactSearch){
+    const q=contactSearch.toLowerCase();
+    filtered=filtered.filter(c=>((c.firstName||'')+' '+(c.lastName||'')+' '+(c.email||'')).toLowerCase().includes(q));
+  }
+  if(activeTagFilter) filtered=filtered.filter(c=>c._tags.includes(activeTagFilter));
+  if(activeListFilter) filtered=filtered.filter(c=>c._lists.includes(activeListFilter));
+  filtered.sort((a,b)=>(a.lastName||'').localeCompare(b.lastName||''));
+
+  const usedTags =[...new Set(allContacts.flatMap(c=>c._tags))];
+  const usedLists=[...new Set(allContacts.flatMap(c=>c._lists))];
+
+  let html=`<div class="contacts-toolbar">
+    <input type="text" placeholder="Search by name or email..." value="${contactSearch.replace(/"/g,'&quot;')}"
+      oninput="contactSearch=this.value;renderContacts()">
+    <button class="refresh-btn" onclick="loadContacts()">&#8635; Refresh</button>
+  </div>`;
+
+  if(usedLists.length){
+    html+=`<div style="font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Lists</div>
+    <div class="filter-pills">
+      <span class="filter-pill ${!activeListFilter?'active':''}" onclick="activeListFilter='';renderContacts()">All lists</span>
+      ${usedLists.map(lid=>`<span class="filter-pill ${activeListFilter===lid?'active':''}" onclick="activeListFilter='${lid}';renderContacts()">${getListName(lid)}</span>`).join('')}
+    </div>`;
+  }
+  if(usedTags.length){
+    html+=`<div style="font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Tags</div>
+    <div class="filter-pills">
+      <span class="filter-pill ${!activeTagFilter?'active':''}" onclick="activeTagFilter='';renderContacts()">All tags</span>
+      ${usedTags.map(tid=>`<span class="filter-pill ${activeTagFilter===tid?'active':''}" onclick="activeTagFilter='${tid}';renderContacts()">${getTagName(tid)}</span>`).join('')}
+    </div>`;
+  }
+
+  html+=`<div class="contacts-count">Showing ${filtered.length} of ${allContacts.length} contacts</div>`;
+
+  if(!filtered.length){
+    html+='<div class="empty" style="padding:2rem 0;">No contacts match your search or filters.</div>';
+  } else {
+    filtered.forEach(c=>{
+      const name=((c.firstName||'')+' '+(c.lastName||'')).trim()||c.email||'Unknown';
+      const initials=name.split(' ').map(n=>n[0]||'').join('').toUpperCase().slice(0,2)||'?';
+      const tags =c._tags.map(t=>`<span class="tag-badge">${getTagName(t)}</span>`).join('');
+      const lists=c._lists.map(l=>`<span class="list-badge">${getListName(l)}</span>`).join('');
+      const phone=c.phone?`<span style="font-size:11px;color:#999;">${c.phone}</span>`:'';
+      html+=`<div class="contact-card">
+        <div class="contact-avatar">${initials}</div>
+        <div class="contact-info">
+          <div class="contact-name">${name}</div>
+          <div class="contact-email">${c.email||'—'} ${phone}</div>
+          <div class="contact-meta">${lists}${tags}${c.score&&c.score!=='0'?`<span class="contact-score">Score: ${c.score}</span>`:''}</div>
+        </div>
+      </div>`;
+    });
+  }
+  body.innerHTML=html;
+}
+
+
+// ── VIRTUAL OFFICE ────────────────────────────────────────
+const VO_LOCATIONS = [
+  {
+    name: 'Magnolia',
+    url:  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSu-2PP6FgUeP5n_NcGEQW7mDdVWaa3KssgDx5WFSH9-YVmEm80IHx5nShmeqPeUNClnMy5QPgloSIB/pub?gid=0&single=true&output=csv'
+  },
+  {
+    name: 'Walden',
+    url:  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSu-2PP6FgUeP5n_NcGEQW7mDdVWaa3KssgDx5WFSH9-YVmEm80IHx5nShmeqPeUNClnMy5QPgloSIB/pub?gid=1730609901&single=true&output=csv'
+  },
+];
+
+async function loadVO(){
+  document.getElementById('vo-body').innerHTML='<div class="loading"><span class="spinner"></span>Loading virtual office data...</div>';
+  await Promise.all(VO_LOCATIONS.map(async loc=>{
+    try{
+      const res=await fetch(loc.url,{mode:'cors'});
+      const text=await res.text();
+      voData[loc.name]=parseCSV(text).filter(r=>r['Unit']&&(r['Company Name']||r['Contact Person']));
+    }catch(e){
+      try{
+        const r2=await fetch('https://corsproxy.io/?'+encodeURIComponent(loc.url));
+        const t2=await r2.text();
+        voData[loc.name]=parseCSV(t2).filter(r=>r['Unit']&&(r['Company Name']||r['Contact Person']));
+      }catch(e2){voData[loc.name]=[];}
+    }
+  }));
+  renderVO();
+}
+
+function svcBadge(svc){
+  if(!svc)return'<span class="svc-badge-other">—</span>';
+  const s=svc.toLowerCase();
+  if(s.includes('address'))return`<span class="svc-badge-addr">Address Only</span>`;
+  if(s.includes('private'))return`<span class="svc-badge-pmb">Private Mailbox</span>`;
+  if(s==='mail')return`<span class="svc-badge-mail">Mail</span>`;
+  return`<span class="svc-badge-other">${svc}</span>`;
+}
+
+function renderVO(){
+  const body=document.getElementById('vo-body');
+  const data=voData[activeVOLocation]||[];
+
+  // Filter
+  let filtered=[...data];
+  if(voSearch){
+    const q=voSearch.toLowerCase();
+    filtered=filtered.filter(r=>(r['Unit']||'').toLowerCase().includes(q)||
+      (r['Company Name']||'').toLowerCase().includes(q)||
+      (r['Contact Person']||'').toLowerCase().includes(q));
+  }
+  if(voServiceFilter) filtered=filtered.filter(r=>(r['Level of Service']||'').toLowerCase().includes(voServiceFilter.toLowerCase()));
+
+  // Metrics
+  const all=voData[activeVOLocation]||[];
+  const addrOnly=all.filter(r=>(r['Level of Service']||'').toLowerCase().includes('address')).length;
+  const pmb=all.filter(r=>(r['Level of Service']||'').toLowerCase().includes('private')).length;
+  const mailOnly=all.filter(r=>(r['Level of Service']||'').toLowerCase()==='mail').length;
+  const vacant=all.filter(r=>!r['Company Name']&&!r['Contact Person']).length;
+
+  let html=`<div class="vo-tabs">
+    ${VO_LOCATIONS.map(l=>`<button class="vtab ${l.name===activeVOLocation?'active':''}" onclick="activeVOLocation='${l.name}';voSearch='';voServiceFilter='';renderVO()">${l.name}</button>`).join('')}
+  </div>`;
+
+  html+=`<div class="metrics">
+    <div class="mc"><div class="mc-label">Total units</div><div class="mc-val">${all.length}</div><div class="mc-sub">${activeVOLocation}</div></div>
+    <div class="mc"><div class="mc-label">Active customers</div><div class="mc-val green">${all.length-vacant}</div><div class="mc-sub">occupied</div></div>
+    <div class="mc"><div class="mc-label">Vacant units</div><div class="mc-val red">${vacant}</div><div class="mc-sub">available</div></div>
+    <div class="mc"><div class="mc-label">Address only</div><div class="mc-val blue">${addrOnly}</div><div class="mc-sub">plan type</div></div>
+    <div class="mc"><div class="mc-label">Private mailbox</div><div class="mc-val" style="color:#3C3489;">${pmb}</div><div class="mc-sub">plan type</div></div>
+    ${mailOnly?`<div class="mc"><div class="mc-label">Mail only</div><div class="mc-val amber">${mailOnly}</div><div class="mc-sub">plan type</div></div>`:''}
+  </div>`;
+
+  html+=`<div class="vo-search">
+    <input type="text" placeholder="Search by unit, company, or contact..." value="${voSearch.replace(/"/g,'&quot;')}"
+      oninput="voSearch=this.value;renderVO()">
+    <select onchange="voServiceFilter=this.value;renderVO()">
+      <option value="">All service types</option>
+      <option value="address" ${voServiceFilter==='address'?'selected':''}>Address Only</option>
+      <option value="private" ${voServiceFilter==='private'?'selected':''}>Private Mailbox</option>
+      <option value="mail" ${voServiceFilter==='mail'?'selected':''}>Mail</option>
+    </select>
+    <button class="refresh-btn" onclick="loadVO()">&#8635; Refresh</button>
+  </div>`;
+
+  html+=`<div class="vo-count">Showing ${filtered.length} of ${all.length} customers</div>`;
+
+  html+=`<div class="card"><div class="vo-table-wrap"><table>
+    <thead><tr>
+      <th>Unit</th>
+      <th>Company Name</th>
+      <th>Contact Person</th>
+      <th>Service</th>
+      <th>Inside Mailbox</th>
+      <th>Outside Mailbox</th>
+    </tr></thead>
+    <tbody>`;
+
+  if(!filtered.length){
+    html+=`<tr><td colspan="6" style="text-align:center;color:#bbb;padding:2rem;">No customers match your search.</td></tr>`;
+  } else {
+    filtered.forEach(r=>{
+      const isEmpty=!r['Company Name']&&!r['Contact Person'];
+      html+=`<tr ${isEmpty?'style="opacity:.4;"':''}>
+        <td><strong>${r['Unit']||'—'}</strong></td>
+        <td>${r['Company Name']||'<span style="color:#bbb;">Vacant</span>'}</td>
+        <td>${r['Contact Person']||'—'}</td>
+        <td>${svcBadge(r['Level of Service'])}</td>
+        <td>${r['Inside Mailbox #']||'—'}</td>
+        <td>${r['Outside Mailbox #']||'—'}</td>
+      </tr>`;
+    });
+  }
+
+  html+=`</tbody></table></div></div>`;
+  body.innerHTML=html;
 }
 
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
