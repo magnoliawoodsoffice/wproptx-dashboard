@@ -821,15 +821,12 @@ function showMoveoutsDetail(){
 
 
 // ── CONTACTS ──────────────────────────────────────────────
-const AC_BASE = 'https://wproptx.activehosted.com';
-const AC_KEY  = 'b423b7e625d7589eff0d27a7a2fb71f6c728170601f11189a08997fb2c37f71fa16ee9b1';
-const CORS    = 'https://corsproxy.io/?';
+const AC_PROXY_URL = 'https://script.google.com/macros/s/AKfycbwAPtM33c6cJHgDzD1Jy4_JubhLcEL4NYlAeaFmOhj7vOsEaqXyPK8mYQzgMMndJD0w2A/exec';
 
-async function acGet(path){
-  const sep = path.includes('?')?'&':'?';
-  const url = AC_BASE + path + sep + 'api_key=' + AC_KEY;
-  const res = await fetch(CORS + encodeURIComponent(url));
-  if(!res.ok) throw new Error('AC API error: ' + res.status);
+async function acProxy(params){
+  const qs = Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+  const res = await fetch(AC_PROXY_URL+'?'+qs, {mode:'cors'});
+  if(!res.ok) throw new Error('Proxy error: '+res.status);
   return res.json();
 }
 
@@ -837,33 +834,33 @@ async function loadContacts(){
   const body = document.getElementById('contacts-body');
   body.innerHTML='<div class="loading"><span class="spinner"></span>Loading contacts from ActiveCampaign...</div>';
   try{
-    const [first, tagsData, listsData] = await Promise.all([
-      acGet('/api/3/contacts?limit=100&offset=0&orders[lastName]=ASC'),
-      acGet('/api/3/tags?limit=100'),
-      acGet('/api/3/lists?limit=100'),
+    // Fetch tags and lists first
+    const [tagsData, listsData] = await Promise.all([
+      acProxy({action:'getTags'}),
+      acProxy({action:'getLists'}),
     ]);
     allContactTags  = tagsData.tags   || [];
     allContactLists = listsData.lists || [];
-    let contacts = first.contacts || [];
-    const total = parseInt((first.meta&&first.meta.total)||contacts.length);
-    if(total > 100){
-      const pages = Math.min(Math.ceil(total/100), 5);
-      const rest  = await Promise.all(
-        Array.from({length:pages-1},(_,i)=>acGet(`/api/3/contacts?limit=100&offset=${(i+1)*100}&orders[lastName]=ASC`))
-      );
-      rest.forEach(p=>{ if(p.contacts) contacts=contacts.concat(p.contacts); });
+
+    // Fetch contacts in batches of 100 (proxy handles tags+lists per contact)
+    let contacts = [];
+    let offset   = 0;
+    let total    = 999;
+    while(contacts.length < total && offset < 500){
+      const page = await acProxy({action:'getContacts', limit:100, offset});
+      total    = parseInt(page.total||0);
+      const batch = page.contacts||[];
+      if(!batch.length) break;
+      // Map _tagIds/_listIds from proxy
+      batch.forEach(c=>{
+        c._tags  = (c._tagIds  ||[]).map(t=>String(t));
+        c._lists = (c._listIds ||[]).map(l=>String(l));
+      });
+      contacts = contacts.concat(batch);
+      offset  += 100;
+      if(batch.length < 100) break;
     }
-    // Fetch tags + lists per contact
-    await Promise.all(contacts.map(async c=>{
-      try{
-        const [ct,cl]=await Promise.all([
-          acGet(`/api/3/contacts/${c.id}/contactTags`),
-          acGet(`/api/3/contacts/${c.id}/contactLists`),
-        ]);
-        c._tags  = (ct.contactTags ||[]).map(t=>String(t.tag));
-        c._lists = (cl.contactLists||[]).filter(l=>l.status==='1').map(l=>String(l.list));
-      }catch(e){ c._tags=[]; c._lists=[]; }
-    }));
+
     allContacts = contacts;
     acContactsLoaded = true;
     renderContacts();
