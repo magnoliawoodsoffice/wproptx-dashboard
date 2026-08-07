@@ -395,9 +395,10 @@ function renderTasks(){
       const isDone=t['Status']==='Done';
       const isInProg=t['Status']==='In Progress';
       const due=t['Due Date']?'Due '+fmtDate(t['Due Date']):'';
+      const mtid=t['Task ID'].replace(/'/g,"\\'");
       html+=`<div class="task-row">
         <div class="priority-dot p-${(t['Priority']||'Medium').toLowerCase()}"></div>
-        <div class="task-check ${isDone?'done':isInProg?'inprog':''}" onclick="cycleStatus('${t['Task ID'].replace(/'/g,"\\'")}')"></div>
+        <div class="task-check ${isDone?'done':isInProg?'inprog':''}" onclick="cycleStatus('${mtid}')"></div>
         <div class="task-body">
           <div class="task-title ${isDone?'done':''}">${t['Title']||'Untitled'}</div>
           <div class="task-meta">
@@ -405,9 +406,10 @@ function renderTasks(){
             ${t['Location']?`<span>${t['Location']}</span>`:''}
             <span class="badge ${isDone?'b-green':isInProg?'b-amber':'b-red'}">${t['Status']}</span>
             <span class="badge b-gray">${t['Priority']||'Medium'}</span>
+            ${isDone?`<span style="font-size:11px;color:#b8934a;cursor:pointer;" onclick="archiveSingleTask('${mtid}')">Archive</span>`:''}
           </div>
         </div>
-        <button class="task-del" onclick="deleteTask('${t['Task ID'].replace(/'/g,"\\'")}')">×</button>
+        <button class="task-del" onclick="deleteTask('${mtid}')">×</button>
       </div>`;
     });
   }
@@ -489,6 +491,33 @@ async function deleteTask(id){
       body:JSON.stringify({action:'deleteTask','Task ID':id})});
     showToast('Task deleted');
   }catch(e){showToast('Error deleting task');}
+}
+
+async function archiveSingleTask(id){
+  const prevTasks=allTasks;
+  allTasks=allTasks.filter(t=>t['Task ID']!==id);
+  if(activeProjectId){
+    const proj=allProjects.find(p=>p['Project ID']===activeProjectId);
+    if(proj){
+      proj['Task Count']=allTasks.filter(t=>t['Project ID']===activeProjectId).length;
+      proj['Completed Count']=allTasks.filter(t=>t['Project ID']===activeProjectId&&t['Status']==='Done').length;
+      proj['Progress']=proj['Task Count']>0?Math.round((proj['Completed Count']/proj['Task Count'])*100):0;
+    }
+    renderProjectDetail(activeProjectId);
+  } else {
+    renderTasks();
+  }
+  try{
+    const res=await fetch(TASKS_API,{method:'POST',mode:'cors',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'archiveTask','Task ID':id})});
+    const data=await res.json();
+    if(data.success)showToast('Task archived');
+    else{allTasks=prevTasks;if(activeProjectId)renderProjectDetail(activeProjectId);else renderTasks();showToast('Error: '+(data.error||'Unknown'));}
+  }catch(e){
+    allTasks=prevTasks;
+    if(activeProjectId)renderProjectDetail(activeProjectId);else renderTasks();
+    showToast('Error archiving task');
+  }
 }
 
 
@@ -655,6 +684,7 @@ function renderProjectDetail(projectId){
           <span class="badge ${isDone?'b-green':isInProg?'b-amber':'b-red'}">${t['Status']}</span>
           <span class="badge b-gray">${t['Priority']||'Medium'}</span>
           <span style="font-size:11px;color:#1D9E75;cursor:pointer;" onclick="editingTaskId='${tid}';renderProjectDetail(activeProjectId)">Edit</span>
+          ${isDone?`<span style="font-size:11px;color:#b8934a;cursor:pointer;" onclick="archiveSingleTask('${tid}')">Archive</span>`:''}
         </div>
         ${editingNotesTaskId===t['Task ID']?`
           <div style="margin-top:8px;">
