@@ -617,9 +617,11 @@ function renderProjectDetail(projectId){
   if(!sorted.length)html+='<div class="empty">No tasks yet. Add the first one below.</div>';
   sorted.forEach(t=>{
     const isDone=t['Status']=='Done',isInProg=t['Status']=='In Progress';
-    html+=`<div class="task-row">
+    const tid=t['Task ID'].replace(/'/g,"\\'");
+    const hasNotes=t['Notes']&&t['Notes'].trim();
+    html+=`<div class="task-row" style="flex-wrap:wrap;">
       <div class="priority-dot p-${(t['Priority']||'Medium').toLowerCase()}"></div>
-      <div class="task-check ${isDone?'done':isInProg?'inprog':''}" onclick="cycleStatus('${t['Task ID'].replace(/'/g,"\\'")}')"></div>
+      <div class="task-check ${isDone?'done':isInProg?'inprog':''}" onclick="cycleStatus('${tid}')"></div>
       <div class="task-body">
         <div class="task-title ${isDone?'done':''}">${t['Title']||'Untitled'}</div>
         <div class="task-meta">
@@ -628,8 +630,22 @@ function renderProjectDetail(projectId){
           <span class="badge ${isDone?'b-green':isInProg?'b-amber':'b-red'}">${t['Status']}</span>
           <span class="badge b-gray">${t['Priority']||'Medium'}</span>
         </div>
+        ${editingNotesTaskId===t['Task ID']?`
+          <div style="margin-top:8px;">
+            <textarea id="note-edit-${tid}" rows="2" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-family:inherit;" placeholder="Add explanation or notes for this task...">${(t['Notes']||'').replace(/</g,'&lt;')}</textarea>
+            <div style="margin-top:4px;display:flex;gap:6px;">
+              <button class="add-btn" style="padding:4px 10px;font-size:11px;" onclick="saveTaskNotes('${tid}')">Save</button>
+              <button class="proj-btn" style="padding:4px 10px;font-size:11px;" onclick="editingNotesTaskId=null;renderProjectDetail(activeProjectId)">Cancel</button>
+            </div>
+          </div>`
+        :hasNotes?`
+          <div style="margin-top:6px;font-size:12px;color:#666;background:#faf9f6;border-left:2px solid #ddd;padding:6px 10px;border-radius:4px;cursor:pointer;" onclick="editingNotesTaskId='${tid}';renderProjectDetail(activeProjectId)">${t['Notes']}</div>`
+        :`
+          <div style="margin-top:4px;">
+            <span style="font-size:11px;color:#1D9E75;cursor:pointer;" onclick="editingNotesTaskId='${tid}';renderProjectDetail(activeProjectId)">+ Add note</span>
+          </div>`}
       </div>
-      <button class="task-del" onclick="deleteTask('${t['Task ID'].replace(/'/g,"\\'")}')">×</button>
+      <button class="task-del" onclick="deleteTask('${tid}')">×</button>
     </div>`;
   });
   html+=`<div class="add-task-form">
@@ -638,11 +654,30 @@ function renderProjectDetail(projectId){
     <select id="pj-task-priority"><option value="High">High</option><option value="Medium" selected>Medium</option><option value="Low">Low</option></select>
     <input type="date" id="pj-task-due">
     <button class="add-btn" onclick="submitProjectTask()">+ Add task</button>
-  </div></div>`;
+  </div>
+  <textarea id="pj-task-notes" rows="2" placeholder="Notes / explanation for this task (optional)..." style="width:100%;margin-top:8px;font-size:12px;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-family:inherit;"></textarea>
+  </div>`;
 
   body.innerHTML=html;
 }
 
+async function saveTaskNotes(taskId){
+  const val=document.getElementById('note-edit-'+taskId).value;
+  try{
+    const res=await fetch(TASKS_API,{method:'POST',mode:'cors',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'updateTask','Task ID':taskId,Notes:val})});
+    const data=await res.json();
+    if(data.success){
+      const t=allTasks.find(x=>x['Task ID']===taskId);
+      if(t)t['Notes']=val;
+      editingNotesTaskId=null;
+      renderProjectDetail(activeProjectId);
+      showToast('Note saved');
+    }else showToast('Error: '+(data.error||'Unknown'));
+  }catch(e){showToast('Error saving note');}
+}
+
+let editingNotesTaskId=null;
 function toggleNewProjForm(){showNewProjForm=!showNewProjForm;renderProjects();}
 
 async function submitProject(){
@@ -676,11 +711,12 @@ async function submitProjectTask(){
         Assignee:document.getElementById('pj-task-assignee').value,
         Priority:document.getElementById('pj-task-priority').value,
         'Due Date':document.getElementById('pj-task-due').value,
+        Notes:document.getElementById('pj-task-notes').value,
         Location:proj?proj['Location']:'',
         Source:'Project',Status:'Open',
         'Project ID':activeProjectId})});
     const data=await res.json();
-    if(data.success){titleEl.value='';showToast('Task added');await loadProjects();}
+    if(data.success){titleEl.value='';document.getElementById('pj-task-notes').value='';showToast('Task added');await loadProjects();}
     else showToast('Error: '+(data.error||'Unknown'));
   }catch(e){showToast('Error adding task');}
   submittingProjectTask=false;
