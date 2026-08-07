@@ -384,9 +384,8 @@ function renderTasks(){
   html+=`<div class="card"><div class="card-hdr"><div class="card-title">${activePerson === 'General' ? 'General — Company Tasks' : activePerson + ' — Tasks'}</div><span style="font-size:12px;color:#999;">${open} open · ${inprog} in progress · ${done} done</span></div>`;
 
   const sorted=[...tasks].sort((a,b)=>{
-    const s={Open:0,'In Progress':1,Done:2};
     const p={High:0,Medium:1,Low:2};
-    return(s[a['Status']]||0)-(s[b['Status']]||0)||(p[a['Priority']]||1)-(p[b['Priority']]||1);
+    return(p[a['Priority']]??1)-(p[b['Priority']]??1)||String(a['Created']||'').localeCompare(String(b['Created']||''));
   });
 
   if(!sorted.length){
@@ -613,7 +612,7 @@ function renderProjectDetail(projectId){
   </div>`;
 
   // Task list
-  const sorted=[...projTasks].sort((a,b)=>{const s={Open:0,'In Progress':1,Done:2};const p={High:0,Medium:1,Low:2};return(s[a['Status']]||0)-(s[b['Status']]||0)||(p[a['Priority']]||1)-(p[b['Priority']]||1);});
+  const sorted=[...projTasks].sort((a,b)=>{const p={High:0,Medium:1,Low:2};return(p[a['Priority']]??1)-(p[b['Priority']]??1)||String(a['Created']||'').localeCompare(String(b['Created']||''));});
   html+=`<div class="card"><div class="card-hdr"><div class="card-title">Project tasks</div><span style="font-size:12px;color:#999;">${projTasks.filter(t=>t['Status']==='Open').length} open · ${projTasks.filter(t=>t['Status']=='Done').length} done</span></div>`;
   if(!sorted.length)html+='<div class="empty">No tasks yet. Add the first one below.</div>';
   sorted.forEach(t=>{
