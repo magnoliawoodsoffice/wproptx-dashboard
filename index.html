@@ -822,6 +822,9 @@ function showMoveoutsDetail(){
 
 // ── CONTACTS ──────────────────────────────────────────────
 const AC_PROXY_URL = 'https://script.google.com/macros/s/AKfycbwAPtM33c6cJHgDzD1Jy4_JubhLcEL4NYlAeaFmOhj7vOsEaqXyPK8mYQzgMMndJD0w2A/exec';
+const AC_WRITE_PROXY_URL = 'https://script.google.com/a/macros/magnoliawoodstexas.com/s/AKfycbzOiQ8_BWY6RpAQDpJE7lgJQfvbKc4Z1xlYbpKDp9QE_m0-NKbwZGQDbYHTbbXLgJoo/exec';
+let showAddContactForm=false, addContactSaving=false, addContactError='';
+const CONTACT_LOCATIONS=['Blue Heron Bay','South Lake Conroe','Magnolia','Walden','Office Park'];
 
 async function acProxy(params){
   const qs = Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
@@ -897,6 +900,7 @@ function renderContacts(){
     <input type="text" placeholder="Search by name or email..." value="${contactSearch.replace(/"/g,'&quot;')}"
       oninput="contactSearch=this.value;renderContacts()">
     <button class="refresh-btn" onclick="loadContacts()">&#8635; Refresh</button>
+    <button class="refresh-btn" style="background:#1D9E75;color:#fff;border-color:#1D9E75;" onclick="openAddContactForm()">+ Add Contact</button>
   </div>`;
 
   if(usedLists.length){
@@ -936,6 +940,114 @@ function renderContacts(){
     });
   }
   body.innerHTML=html;
+  renderAddContactModal();
+}
+
+function openAddContactForm(){
+  showAddContactForm=true;
+  addContactError='';
+  renderAddContactModal();
+}
+function closeAddContactForm(){
+  showAddContactForm=false;
+  renderAddContactModal();
+}
+
+function renderAddContactModal(){
+  let el=document.getElementById('add-contact-modal-root');
+  if(!el){
+    el=document.createElement('div');
+    el.id='add-contact-modal-root';
+    document.body.appendChild(el);
+  }
+  if(!showAddContactForm){ el.innerHTML=''; return; }
+
+  const tagOptions = allContactTags.map(t=>`<option value="${t.tag||t.name}">${t.tag||t.name}</option>`).join('');
+  const listOptions = allContactLists.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+  const locOptions = CONTACT_LOCATIONS.map(l=>`<option value="${l}">${l}</option>`).join('');
+
+  el.innerHTML=`
+  <div style="position:fixed;inset:0;background:rgba(16,36,28,0.5);display:flex;align-items:center;justify-content:center;z-index:2000;padding:20px;" onclick="if(event.target===this)closeAddContactForm()">
+    <div style="background:#fff;border-radius:8px;padding:28px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+      <h3 style="margin:0 0 18px;color:#1D9E75;">Add Contact</h3>
+
+      ${addContactError?`<div style="background:#fbeceb;color:#8a2e28;padding:10px 12px;border-radius:4px;font-size:12px;margin-bottom:14px;">${addContactError}</div>`:''}
+
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;"><label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:4px;">First Name</label>
+          <input id="ac-first" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;margin-bottom:12px;"></div>
+        <div style="flex:1;"><label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:4px;">Last Name</label>
+          <input id="ac-last" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;margin-bottom:12px;"></div>
+      </div>
+
+      <label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:4px;">Email *</label>
+      <input id="ac-email" type="email" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;margin-bottom:12px;">
+
+      <label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:4px;">Phone</label>
+      <input id="ac-phone" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;margin-bottom:12px;">
+
+      <label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:4px;">Location</label>
+      <select id="ac-location" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;margin-bottom:12px;">
+        <option value="">— None —</option>
+        ${locOptions}
+      </select>
+
+      <label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:4px;">List</label>
+      <select id="ac-list" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;margin-bottom:12px;">
+        <option value="">— None —</option>
+        ${listOptions}
+      </select>
+
+      <label style="display:block;font-size:11px;color:#888;font-weight:600;margin-bottom:4px;">Tags (comma-separated)</label>
+      <input id="ac-tags" placeholder="e.g. prospect, Day Office" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;margin-bottom:6px;">
+      <div style="font-size:10px;color:#aaa;margin-bottom:12px;">Existing tags include: ${allContactTags.slice(0,10).map(t=>t.tag||t.name).join(', ')}${allContactTags.length>10?'...':''}</div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+        <button onclick="closeAddContactForm()" ${addContactSaving?'disabled':''} style="padding:9px 16px;border:1px solid #ddd;border-radius:4px;background:#fff;cursor:pointer;">Cancel</button>
+        <button onclick="submitAddContact()" ${addContactSaving?'disabled':''} style="padding:9px 20px;border:none;border-radius:4px;background:#1D9E75;color:#fff;font-weight:600;cursor:pointer;opacity:${addContactSaving?'0.6':'1'};">${addContactSaving?'Saving…':'Save Contact'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function submitAddContact(){
+  const firstName = document.getElementById('ac-first').value.trim();
+  const lastName  = document.getElementById('ac-last').value.trim();
+  const email     = document.getElementById('ac-email').value.trim();
+  const phone     = document.getElementById('ac-phone').value.trim();
+  const location  = document.getElementById('ac-location').value;
+  const listId    = document.getElementById('ac-list').value;
+  const tagsRaw   = document.getElementById('ac-tags').value.trim();
+  const tags      = tagsRaw ? tagsRaw.split(',').map(t=>t.trim()).filter(Boolean) : [];
+
+  if(!email){
+    addContactError='Email is required.';
+    renderAddContactModal();
+    return;
+  }
+
+  addContactSaving=true;
+  addContactError='';
+  renderAddContactModal();
+
+  try{
+    const res = await fetch(AC_WRITE_PROXY_URL, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain'}, // avoids CORS preflight on Apps Script
+      body: JSON.stringify({ action:'createContact', firstName, lastName, email, phone, location, listId, tags })
+    });
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+
+    addContactSaving=false;
+    showAddContactForm=false;
+    renderAddContactModal();
+    await loadContacts(); // refresh list to show the new contact
+  }catch(err){
+    addContactSaving=false;
+    addContactError='Could not save: '+err.message;
+    renderAddContactModal();
+  }
 }
 
 
