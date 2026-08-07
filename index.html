@@ -848,10 +848,10 @@ async function loadContacts(){
     // Fetch contacts in batches of 100 (proxy handles tags+lists per contact)
     let contacts = [];
     let offset   = 0;
-    let total    = 999;
-    while(contacts.length < total && offset < 500){
+    let total    = 999999; // don't trust total for loop control — rely on batch size instead
+    while(offset < 2000){
       const page = await acProxy({action:'getContacts', limit:100, offset});
-      total    = parseInt(page.total||0);
+      total    = parseInt(page.total||0) || total;
       const batch = page.contacts||[];
       if(!batch.length) break;
       // Map _tagIds/_listIds from proxy
