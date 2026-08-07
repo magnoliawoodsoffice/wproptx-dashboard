@@ -225,6 +225,7 @@ const TEAM=['General','James','Johnna','Crystal','Angela','Chris','Christine'];
 let acContactsLoaded=false,allContacts=[],allContactTags=[],allContactLists=[],activeTagFilter='',activeListFilter='',contactSearch='';
 let voData={Magnolia:[],Walden:[]},activeVOLocation='Magnolia',voSearch='',voServiceFilter='';
 let allData={},activeLoc='All Locations',activePropSec='overview',activeMain='properties',activePerson='General',allTasks=[],allProjects=[],activeProjectId=null,showNewProjForm=false;
+let showArchiveView=false,archivedItems=[],archiveLoaded=false,archiveTypeFilter='All',archiveAssigneeFilter='All';
 
 function switchMain(s){
   activeMain=s;
@@ -381,7 +382,12 @@ function renderTasks(){
   });
   html+=`</div>`;
 
-  html+=`<div class="card"><div class="card-hdr"><div class="card-title">${activePerson === 'General' ? 'General — Company Tasks' : activePerson + ' — Tasks'}</div><span style="font-size:12px;color:#999;">${open} open · ${inprog} in progress · ${done} done</span></div>`;
+  html+=`<div class="card"><div class="card-hdr"><div class="card-title">${activePerson === 'General' ? 'General — Company Tasks' : activePerson + ' — Tasks'}</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-size:12px;color:#999;">${open} open · ${inprog} in progress · ${done} done</span>
+      <button class="proj-btn" style="padding:5px 12px;font-size:12px;" onclick="openArchiveView()">📦 View Archive</button>
+    </div>
+  </div>`;
 
   const sorted=[...tasks].sort((a,b)=>{
     const p={High:0,Medium:1,Low:2};
@@ -447,6 +453,86 @@ async function submitTask(){
     else showToast('Error: '+( data.error||'Unknown'));
   }catch(e){showToast('Could not connect to tasks API');}
   btn.disabled=false;btn.textContent='+ Add task';
+}
+
+async function openArchiveView(){
+  showArchiveView=true;
+  renderArchiveModal();
+  if(!archiveLoaded)await loadArchived();
+  else renderArchiveModal();
+}
+
+function closeArchiveView(){
+  showArchiveView=false;
+  renderArchiveModal();
+}
+
+async function loadArchived(){
+  try{
+    const res=await fetch(TASKS_API+'?action=getArchived');
+    const data=await res.json();
+    archivedItems=data.archived||[];
+    archiveLoaded=true;
+  }catch(e){
+    archivedItems=[];
+  }
+  renderArchiveModal();
+}
+
+async function restoreArchivedTask(taskId){
+  showToast('Restore not yet available — contact Claude to add this if needed.');
+}
+
+function renderArchiveModal(){
+  let el=document.getElementById('archive-modal-root');
+  if(!el){
+    el=document.createElement('div');
+    el.id='archive-modal-root';
+    document.body.appendChild(el);
+  }
+  if(!showArchiveView){el.innerHTML='';return;}
+
+  let items=archivedItems.filter(a=>a['Type']==='Task');
+  if(archiveTypeFilter!=='All')items=items.filter(a=>a['Assignee']===archiveTypeFilter);
+
+  const assigneesInArchive=[...new Set(archivedItems.filter(a=>a['Type']==='Task').map(a=>a['Assignee']).filter(Boolean))];
+
+  el.innerHTML=`
+  <div style="position:fixed;inset:0;background:rgba(16,36,28,0.5);display:flex;align-items:center;justify-content:center;z-index:2000;padding:20px;" onclick="if(event.target===this)closeArchiveView()">
+    <div style="background:#fff;border-radius:8px;padding:28px;max-width:720px;width:100%;max-height:85vh;overflow-y:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="margin:0;color:#1D9E75;">📦 Archived Tasks</h3>
+        <span style="cursor:pointer;font-size:20px;color:#999;" onclick="closeArchiveView()">×</span>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+        <select onchange="archiveTypeFilter=this.value;renderArchiveModal()" style="font-size:12px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;">
+          <option value="All" ${archiveTypeFilter==='All'?'selected':''}>All assignees</option>
+          ${assigneesInArchive.map(a=>`<option value="${a}" ${archiveTypeFilter===a?'selected':''}>${a}</option>`).join('')}
+        </select>
+        <button class="proj-btn" style="padding:6px 12px;font-size:12px;" onclick="archiveLoaded=false;loadArchived()">&#8635; Refresh</button>
+        <span style="font-size:12px;color:#999;margin-left:auto;">${items.length} archived task${items.length===1?'':'s'}</span>
+      </div>
+
+      ${!archiveLoaded?'<div class="empty">Loading archived tasks...</div>'
+        :!items.length?'<div class="empty">No archived tasks yet.</div>'
+        :items.map(a=>`
+          <div style="padding:12px 14px;border:1px solid #eee;border-radius:8px;margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+              <div style="font-size:13px;font-weight:600;">${a['Title']||'Untitled'}</div>
+              <div style="font-size:11px;color:#999;white-space:nowrap;">Archived ${a['Archived Date']}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+              <span class="badge b-gray" style="font-size:10px;">${a['Assignee']||'—'}</span>
+              ${a['Project Name']?`<span class="badge b-blue" style="font-size:10px;">${a['Project Name']}</span>`:''}
+              ${a['Location']?`<span class="badge b-gray" style="font-size:10px;">${a['Location']}</span>`:''}
+              <span class="badge b-green" style="font-size:10px;">${a['Status']||'Done'}</span>
+            </div>
+            ${a['Notes']?`<div style="margin-top:6px;font-size:12px;color:#666;">${a['Notes']}</div>`:''}
+          </div>
+        `).join('')}
+    </div>
+  </div>`;
 }
 
 async function cycleStatus(id){
