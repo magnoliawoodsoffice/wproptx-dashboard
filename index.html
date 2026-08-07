@@ -285,6 +285,7 @@ function getLocData(){
 
 function daysUntil(ds){if(!ds)return null;const d=new Date(ds);if(isNaN(d))return null;return Math.ceil((d-new Date())/86400000);}
 function fmtDate(ds){if(!ds)return'—';const d=new Date(ds);if(isNaN(d))return ds;return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+function toIsoDate(ds){if(!ds)return'';const d=new Date(ds);if(isNaN(d))return'';const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;}
 function statusBadge(s){if(!s)return'<span class="badge b-gray">—</span>';const sl=s.toLowerCase();if(sl==='rented')return'<span class="badge b-green">Rented</span>';if(sl==='vacant')return'<span class="badge b-red">Vacant</span>';if(sl.includes('notice'))return'<span class="badge b-amber">Notice given</span>';return'<span class="badge b-gray">'+s+'</span>';}
 function expiryBadge(ds){const d=daysUntil(ds);if(d===null)return'<span class="badge b-gray">—</span>';if(d<0)return'<span class="badge b-red">Expired</span>';if(d<=30)return'<span class="badge b-red">'+d+'d</span>';if(d<=60)return'<span class="badge b-amber">'+d+'d</span>';return'<span class="badge b-green">'+d+'d</span>';}
 function locBadge(n){const l=LOCATIONS.find(x=>x.name===n);return`<span class="badge ${l?l.color:'b-gray'}"><span class="loc-dot" style="background:${l?l.dot:'#999'};"></span>${n}</span>`;}
@@ -619,6 +620,31 @@ function renderProjectDetail(projectId){
     const isDone=t['Status']=='Done',isInProg=t['Status']=='In Progress';
     const tid=t['Task ID'].replace(/'/g,"\\'");
     const hasNotes=t['Notes']&&t['Notes'].trim();
+
+    if(editingTaskId===t['Task ID']){
+      html+=`<div class="task-row" style="flex-wrap:wrap;background:#faf9f6;">
+        <div class="priority-dot p-${(t['Priority']||'Medium').toLowerCase()}"></div>
+        <div class="task-body" style="width:100%;">
+          <div class="task-title" style="margin-bottom:8px;">${t['Title']||'Untitled'}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="edit-assignee-${tid}" style="font-size:12px;padding:5px 8px;border:1px solid #ddd;border-radius:6px;">
+              ${TEAM.map(p=>`<option value="${p}" ${p===t['Assignee']?'selected':''}>${p}</option>`).join('')}
+            </select>
+            <select id="edit-priority-${tid}" style="font-size:12px;padding:5px 8px;border:1px solid #ddd;border-radius:6px;">
+              ${['High','Medium','Low'].map(p=>`<option value="${p}" ${p===t['Priority']?'selected':''}>${p}</option>`).join('')}
+            </select>
+            <input type="date" id="edit-due-${tid}" value="${t['Due Date']?toIsoDate(t['Due Date']):''}" style="font-size:12px;padding:5px 8px;border:1px solid #ddd;border-radius:6px;">
+            <select id="edit-status-${tid}" style="font-size:12px;padding:5px 8px;border:1px solid #ddd;border-radius:6px;">
+              ${['Open','In Progress','Done'].map(s=>`<option value="${s}" ${s===t['Status']?'selected':''}>${s}</option>`).join('')}
+            </select>
+            <button class="add-btn" style="padding:5px 12px;font-size:11px;" onclick="saveTaskEdit('${tid}')">Save</button>
+            <button class="proj-btn" style="padding:5px 12px;font-size:11px;" onclick="editingTaskId=null;renderProjectDetail(activeProjectId)">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+      return;
+    }
+
     html+=`<div class="task-row" style="flex-wrap:wrap;">
       <div class="priority-dot p-${(t['Priority']||'Medium').toLowerCase()}"></div>
       <div class="task-check ${isDone?'done':isInProg?'inprog':''}" onclick="cycleStatus('${tid}')"></div>
@@ -629,6 +655,7 @@ function renderProjectDetail(projectId){
           ${t['Due Date']?`<span>Due ${fmtDate(t['Due Date'])}</span>`:''}
           <span class="badge ${isDone?'b-green':isInProg?'b-amber':'b-red'}">${t['Status']}</span>
           <span class="badge b-gray">${t['Priority']||'Medium'}</span>
+          <span style="font-size:11px;color:#1D9E75;cursor:pointer;" onclick="editingTaskId='${tid}';renderProjectDetail(activeProjectId)">Edit</span>
         </div>
         ${editingNotesTaskId===t['Task ID']?`
           <div style="margin-top:8px;">
@@ -677,7 +704,28 @@ async function saveTaskNotes(taskId){
   }catch(e){showToast('Error saving note');}
 }
 
+async function saveTaskEdit(taskId){
+  const assignee=document.getElementById('edit-assignee-'+taskId).value;
+  const priority=document.getElementById('edit-priority-'+taskId).value;
+  const dueDate=document.getElementById('edit-due-'+taskId).value;
+  const status=document.getElementById('edit-status-'+taskId).value;
+  try{
+    const res=await fetch(TASKS_API,{method:'POST',mode:'cors',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'updateTask','Task ID':taskId,
+        Assignee:assignee,Priority:priority,'Due Date':dueDate,Status:status})});
+    const data=await res.json();
+    if(data.success){
+      const t=allTasks.find(x=>x['Task ID']===taskId);
+      if(t){t['Assignee']=assignee;t['Priority']=priority;t['Due Date']=dueDate;t['Status']=status;}
+      editingTaskId=null;
+      renderProjectDetail(activeProjectId);
+      showToast('Task updated');
+    }else showToast('Error: '+(data.error||'Unknown'));
+  }catch(e){showToast('Error updating task');}
+}
+
 let editingNotesTaskId=null;
+let editingTaskId=null;
 function toggleNewProjForm(){showNewProjForm=!showNewProjForm;renderProjects();}
 
 async function submitProject(){
