@@ -261,9 +261,16 @@ function parseCSV(text){
 
 async function loadPropertyData(){
   document.getElementById('last-updated').textContent='Loading...';
+  const RAILWAY_CSV_PROXY='https://magnolia-platform-backend1-production.up.railway.app/api/csv-proxy?url=';
   await Promise.all(LOCATIONS.map(async loc=>{
-    try{const res=await fetch(loc.url,{mode:'cors'});allData[loc.name]=parseCSV(await res.text());}
-    catch(e){try{const r2=await fetch('https://corsproxy.io/?'+encodeURIComponent(loc.url));allData[loc.name]=parseCSV(await r2.text());}catch(e2){allData[loc.name]=null;}}
+    try{
+      const res=await fetch(RAILWAY_CSV_PROXY+encodeURIComponent(loc.url));
+      if(!res.ok)throw new Error('proxy failed');
+      allData[loc.name]=parseCSV(await res.text());
+    }catch(e){
+      try{const r2=await fetch(loc.url,{mode:'cors'});allData[loc.name]=parseCSV(await r2.text());}
+      catch(e2){allData[loc.name]=null;}
+    }
   }));
   document.getElementById('last-updated').textContent='Last updated: '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})+' · '+new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
   renderLocTabs();renderProperties();
@@ -1287,14 +1294,16 @@ const VO_LOCATIONS = [
 
 async function loadVO(){
   document.getElementById('vo-body').innerHTML='<div class="loading"><span class="spinner"></span>Loading virtual office data...</div>';
+  const RAILWAY_CSV_PROXY='https://magnolia-platform-backend1-production.up.railway.app/api/csv-proxy?url=';
   await Promise.all(VO_LOCATIONS.map(async loc=>{
     try{
-      const res=await fetch(loc.url,{mode:'cors'});
+      const res=await fetch(RAILWAY_CSV_PROXY+encodeURIComponent(loc.url));
+      if(!res.ok)throw new Error('proxy failed');
       const text=await res.text();
       voData[loc.name]=parseCSV(text).filter(r=>r['Unit']&&(r['Company Name']||r['Contact Person']));
     }catch(e){
       try{
-        const r2=await fetch('https://corsproxy.io/?'+encodeURIComponent(loc.url));
+        const r2=await fetch(loc.url,{mode:'cors'});
         const t2=await r2.text();
         voData[loc.name]=parseCSV(t2).filter(r=>r['Unit']&&(r['Company Name']||r['Contact Person']));
       }catch(e2){voData[loc.name]=[];}
